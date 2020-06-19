@@ -70,6 +70,8 @@ type
     FCellBuffer: String;
     FWhitespaceBuffer: String;
     procedure ClearOutput;
+    function GetPosition: Int64;
+    procedure SetPosition(AValue: Int64);
     // basic parsing
     procedure SkipEndOfLine;
     procedure SkipDelimiter;
@@ -91,6 +93,8 @@ type
     procedure ResetParser;
     // Read next cell data; return false if end of file reached
     function  ParseNextCell: Boolean;
+    // Must be called after the setting of raw stream position
+    function JumpToEndOfLine: Boolean;
     // Current row (0 based)
     property CurrentRow: Integer read FCurrentRow;
     // Current column (0 based); -1 if invalid/before beginning of file
@@ -105,6 +109,8 @@ type
     property BOM: TCSVByteOrderMark read FBOM;
     // Detect whether a BOM marker is present. If set to True, then BOM can be used to see what BOM marker there was.
     property DetectBOM: Boolean read FDetectBOM write FDetectBOM default false;
+    //  be careful while set the raw position
+    property Position: Int64 read GetPosition write SetPosition;
   end;
 
 implementation
@@ -131,6 +137,16 @@ begin
   FCurrentRow := 0;
   FCurrentCol := -1;
   FMaxColCount := 0;
+end;
+
+function TCSVParserEx.GetPosition: Int64;
+begin
+  Result := FSourceStream.Position;
+end;
+
+procedure TCSVParserEx.SetPosition(AValue: Int64);
+begin
+  FSourceStream.Position:=AValue;
 end;
 
 procedure TCSVParserEx.SkipEndOfLine;
@@ -329,6 +345,15 @@ begin
     SkipDelimiter;
   ParseCell;
   Result := True;
+end;
+
+function TCSVParserEx.JumpToEndOfLine: Boolean;
+begin
+  repeat
+    if not ParseNextCell
+      Exit(False);
+  until EndOfLine;
+  Result:=True;
 end;
 
 end.
