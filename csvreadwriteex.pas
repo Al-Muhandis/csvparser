@@ -79,6 +79,7 @@ type
     procedure NextChar;
     // complex parsing
     procedure ParseCell;
+    procedure ParseCellJump;
     procedure ParseQuotedValue;
     // simple parsing
     procedure ParseValue;
@@ -92,7 +93,8 @@ type
     // Rewind to beginning of data
     procedure ResetParser;
     // Read next cell data; return false if end of file reached
-    function  ParseNextCell: Boolean;
+    function  ParseNextCell: Boolean;                       
+    function  ParseNextCellJump: Boolean;
     // Must be called after the setting of raw stream position
     function JumpToEndOfLine: Boolean;
     // Current row (0 based)
@@ -189,6 +191,14 @@ begin
     ParseQuotedValue
   else
     ParseValue;
+end;
+
+procedure TCSVParserEx.ParseCellJump;
+begin
+  FCellBuffer := '';
+  if FIgnoreOuterWhitespace then
+    SkipWhitespace;
+  ParseValue;
 end;
 
 procedure TCSVParserEx.ParseQuotedValue;
@@ -347,10 +357,46 @@ begin
   Result := True;
 end;
 
+function TCSVParserEx.ParseNextCellJump: Boolean;
+var
+  LineColCount: Integer;
+begin
+  if EndOfLine or EndOfFile then
+  begin
+    // Having read the previous line, adjust column count if necessary:
+    LineColCount := FCurrentCol + 1;
+    if LineColCount > FMaxColCount then
+      FMaxColCount := LineColCount;
+  end;
+
+  if EndOfFile then
+    Exit(False);
+
+  // Handle line ending
+  if EndOfLine then
+  begin
+    SkipEndOfLine;
+    if EndOfFile then
+      Exit(False);
+    FCurrentCol := 0;
+    Inc(FCurrentRow);
+  end else
+    Inc(FCurrentCol);
+
+  // Skipping a delimiter should be immediately followed by parsing a cell
+  // without checking for line break first, otherwise we miss last empty cell.
+  // But 0th cell does not start with delimiter unlike other cells, so
+  // the following check is required not to miss the first empty cell:
+  if FCurrentCol > 0 then
+    SkipDelimiter;
+  ParseCellJump;
+  Result := True;
+end;
+
 function TCSVParserEx.JumpToEndOfLine: Boolean;
 begin
   repeat
-    if not ParseNextCell
+    if not ParseNextCell then
       Exit(False);
   until EndOfLine;
   Result:=True;
